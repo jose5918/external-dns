@@ -21,9 +21,13 @@ import (
 	"os"
 	"testing"
 
+	"strconv"
+
 	"github.com/dnsimple/dnsimple-go/dnsimple"
 	"github.com/kubernetes-incubator/external-dns/endpoint"
 	"github.com/kubernetes-incubator/external-dns/plan"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockDnsimpleZonesService struct{}
@@ -88,56 +92,6 @@ func (m *mockDnsimpleZonesService) DeleteRecord(accountID string, zoneID string,
 }
 
 func (m *mockDnsimpleZonesService) UpdateRecord(accountID string, zoneID string, recordID int, recordAttributes dnsimple.ZoneRecord) (*dnsimple.ZoneRecordResponse, error) {
-	return &dnsimple.ZoneRecordResponse{}, nil
-}
-
-type mockDnsimpleZonesServiceZonesFail struct{}
-
-func (m *mockDnsimpleZonesServiceZonesFail) ListZones(accountID string, options *dnsimple.ZoneListOptions) (*dnsimple.ZonesResponse, error) {
-	return nil, fmt.Errorf("Failed to list zones")
-}
-func (m *mockDnsimpleZonesServiceZonesFail) GetZone(accountID string, zoneName string) (*dnsimple.ZoneResponse, error) {
-	return &dnsimple.ZoneResponse{}, nil
-}
-
-func (m *mockDnsimpleZonesServiceZonesFail) ListRecords(accountID string, zoneID string, options *dnsimple.ZoneRecordListOptions) (*dnsimple.ZoneRecordsResponse, error) {
-	firstRecord := dnsimple.ZoneRecord{
-		ID:       2,
-		ZoneID:   "example.com",
-		ParentID: 0,
-		Name:     "",
-		Content:  "ns1.dnsimple.com",
-		TTL:      3600,
-		Priority: 0,
-		Type:     "SOA",
-	}
-	secondRecord := dnsimple.ZoneRecord{
-		ID:       1,
-		ZoneID:   "example-alpha.com",
-		ParentID: 0,
-		Name:     "",
-		Content:  "127.0.0.1",
-		TTL:      3600,
-		Priority: 0,
-		Type:     "A",
-	}
-	records := []dnsimple.ZoneRecord{firstRecord, secondRecord}
-	listResponse := dnsimple.ZoneRecordsResponse{
-		Response: dnsimple.Response{},
-		Data:     records,
-	}
-	return &listResponse, nil
-}
-
-func (m *mockDnsimpleZonesServiceZonesFail) CreateRecord(accountID string, zoneID string, recordAttributes dnsimple.ZoneRecord) (*dnsimple.ZoneRecordResponse, error) {
-	return &dnsimple.ZoneRecordResponse{}, nil
-}
-
-func (m *mockDnsimpleZonesServiceZonesFail) DeleteRecord(accountID string, zoneID string, recordID int) (*dnsimple.ZoneRecordResponse, error) {
-	return &dnsimple.ZoneRecordResponse{}, nil
-}
-
-func (m *mockDnsimpleZonesServiceZonesFail) UpdateRecord(accountID string, zoneID string, recordID int, recordAttributes dnsimple.ZoneRecord) (*dnsimple.ZoneRecordResponse, error) {
 	return &dnsimple.ZoneRecordResponse{}, nil
 }
 
@@ -387,23 +341,59 @@ func TestNewDnsimpleProvider(t *testing.T) {
 		t.Errorf("Expected to fail new provider on empty token")
 	}
 }
-func TestDnsimpleProvider_Zones(t *testing.T) {
 
-	provider := &dnsimpleProvider{
-		client: &mockDnsimpleZonesService{},
-	}
-	_, err := provider.Zones()
+// func TestDnsimple(t *testing.T) {
+// 	mockDNS := mocks.DnsimpleZoneServiceInterface{}
+// 	testDnsimpleProviderZones
+// 	t.Run("Zones", testDnsimpleProviderZones)
+// }
+
+// func testDnsimpleProviderZones(t *testing.T, mock.DnsimpleZoneServiceInterface) {
+// 	firstZone := dnsimple.Zone{
+// 		ID:        1,
+// 		AccountID: 12345,
+// 		Name:      "example.com",
+// 	}
+// 	secondZone := dnsimple.Zone{
+// 		ID:        2,
+// 		AccountID: 54321,
+// 		Name:      "example-beta.com",
+// 	}
+// 	zones := []dnsimple.Zone{firstZone, secondZone}
+// 	listResponse := dnsimple.ZonesResponse{
+// 		Response: dnsimple.Response{},
+// 		Data:     zones,
+// 	}
+// 	mockDNS := &mocks.DnsimpleZoneServiceInterface{}
+// 	mockDNS.On("ListZones", "1", &dnsimple.ZoneListOptions{}).Return(&listResponse, nil)
+// 	mockDNS.On("ListZones", "2", &dnsimple.ZoneListOptions{}).Return(nil, fmt.Errorf("Account ID not found"))
+// 	provider := dnsimpleProvider{
+// 		client:    mockDNS,
+// 		accountID: "1",
+// 	}
+// 	result, err := provider.Zones()
+// 	assert.Nil(t, err)
+// 	validateDnsimpleZones(t, result, zones)
+
+// 	provider.accountID = "2"
+// 	result, err = provider.Zones()
+// 	assert.NotNil(t, err)
+// }
+func TestForReal(t *testing.T) {
+	os.Setenv("DNSIMPLE_OAUTH", "")
+	provider, err := NewDnsimpleProvider("kube-external-test.io", false)
 	if err != nil {
-		t.Errorf("Failed to get zones: %v", err)
+		t.Errorf("Expected to fail new provider on bad token: %v", err)
 	}
-	provider.client = &mockDnsimpleZonesServiceZonesFail{}
-	_, err = provider.Zones()
-	if err == nil {
-		t.Errorf("Expected zones failure")
+	os.Setenv("DNSIMPLE_SANDBOX", "true")
+	changes := &plan.Changes{}
+	changes.Delete = []*endpoint.Endpoint{{DNSName: "example-beta.kube-external-test.io", Target: "target"}}
+	err = provider.ApplyChanges(changes)
+	if err != nil {
+		t.Errorf("Failed to apply changes: %v", err)
 	}
 
 }
-
 func TestDnsimpleProvider_Records(t *testing.T) {
 	provider := &dnsimpleProvider{
 		client: &mockDnsimpleZonesService{},
@@ -502,11 +492,28 @@ func TestDnsimpleProvider_ApplyChanges(t *testing.T) {
 	provider := &dnsimpleProvider{
 		client: &mockDnsimpleZonesService{},
 	}
-	changes.Create = []*endpoint.Endpoint{{DNSName: "example-beta.com", Target: "target"}}
-	changes.Delete = []*endpoint.Endpoint{{DNSName: "example-beta", Target: "127.0.0.1"}}
-	changes.UpdateNew = []*endpoint.Endpoint{{DNSName: "example-beta", Target: "target-new"}}
+	changes.Create = []*endpoint.Endpoint{{DNSName: "example-beta.example.com", Target: "target"}}
+	changes.Delete = []*endpoint.Endpoint{{DNSName: "example-beta.example.com", Target: "127.0.0.1"}}
+	changes.UpdateNew = []*endpoint.Endpoint{{DNSName: "example.example.com", Target: "target-new"}}
 	err := provider.ApplyChanges(changes)
 	if err != nil {
 		t.Errorf("Failed to apply changes: %v", err)
+	}
+}
+
+func TestDnsimpleSuitableZone(t *testing.T) {
+	provider := &dnsimpleProvider{
+		client: &mockDnsimpleZonesService{},
+	}
+	zones, _ := provider.Zones()
+	zone := dnsimpleSuitableZone("example-beta.example.com", zones)
+	assert.Equal(t, zone.Name, "example.com")
+}
+
+func validateDnsimpleZones(t *testing.T, zones map[string]dnsimple.Zone, expected []dnsimple.Zone) {
+	require.Len(t, zones, len(expected))
+
+	for _, e := range expected {
+		assert.Equal(t, zones[strconv.Itoa(e.ID)].Name, e.Name)
 	}
 }

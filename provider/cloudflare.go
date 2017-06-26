@@ -49,33 +49,33 @@ type cloudFlareDNS interface {
 	UpdateDNSRecord(zoneID, recordID string, rr cloudflare.DNSRecord) error
 }
 
-type zoneService struct {
+type cloudFlareZoneService struct {
 	service *cloudflare.API
 }
 
-func (z zoneService) UserDetails() (cloudflare.User, error) {
+func (z cloudFlareZoneService) UserDetails() (cloudflare.User, error) {
 	return z.service.UserDetails()
 }
 
-func (z zoneService) ListZones(zoneID ...string) ([]cloudflare.Zone, error) {
+func (z cloudFlareZoneService) ListZones(zoneID ...string) ([]cloudflare.Zone, error) {
 	return z.service.ListZones(zoneID...)
 }
 
-func (z zoneService) ZoneIDByName(zoneName string) (string, error) {
+func (z cloudFlareZoneService) ZoneIDByName(zoneName string) (string, error) {
 	return z.service.ZoneIDByName(zoneName)
 }
 
-func (z zoneService) CreateDNSRecord(zoneID string, rr cloudflare.DNSRecord) (*cloudflare.DNSRecordResponse, error) {
+func (z cloudFlareZoneService) CreateDNSRecord(zoneID string, rr cloudflare.DNSRecord) (*cloudflare.DNSRecordResponse, error) {
 	return z.service.CreateDNSRecord(zoneID, rr)
 }
 
-func (z zoneService) DNSRecords(zoneID string, rr cloudflare.DNSRecord) ([]cloudflare.DNSRecord, error) {
+func (z cloudFlareZoneService) DNSRecords(zoneID string, rr cloudflare.DNSRecord) ([]cloudflare.DNSRecord, error) {
 	return z.service.DNSRecords(zoneID, rr)
 }
-func (z zoneService) UpdateDNSRecord(zoneID, recordID string, rr cloudflare.DNSRecord) error {
+func (z cloudFlareZoneService) UpdateDNSRecord(zoneID, recordID string, rr cloudflare.DNSRecord) error {
 	return z.service.UpdateDNSRecord(zoneID, recordID, rr)
 }
-func (z zoneService) DeleteDNSRecord(zoneID, recordID string) error {
+func (z cloudFlareZoneService) DeleteDNSRecord(zoneID, recordID string) error {
 	return z.service.DeleteDNSRecord(zoneID, recordID)
 }
 
@@ -102,7 +102,7 @@ func NewCloudFlareProvider(domainFilter string, dryRun bool) (*CloudFlareProvide
 	}
 	provider := &CloudFlareProvider{
 		//Client: config,
-		Client:       zoneService{config},
+		Client:       cloudFlareZoneService{config},
 		domainFilter: domainFilter,
 		DryRun:       dryRun,
 	}
